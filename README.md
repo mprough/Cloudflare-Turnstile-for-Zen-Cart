@@ -1,22 +1,26 @@
 # Cloudflare Turnstile for Zen Cart
 
-Development for Zen Cart 2.0.0, 2.0.1, 2.1.0, and 2.2.2 starts with the 2.1.0 storefront. This branch contains the PHP Siteverify client. It requires PHP 8 and cURL. Storefront wiring and Admin settings are pending.
+## Dev build 0.1.0
 
-## Default storefront route presets
+This build manages Cloudflare WAF Managed Challenges for storefront page visits from Zen Cart Admin. Cloudflare evaluates matching GET and HEAD requests before forwarding them to the store. The storefront forms, including any hardwired reCAPTCHA, keep their existing validation. This build uses the WAF and needs no Turnstile widget keys.
 
-| Preset | Zen Cart 2.1.0 integration point |
-| --- | --- |
-| Login | `NOTIFY_HEADER_START_LOGIN` before handling `action=process`. |
-| Create account | `NOTIFY_HEADER_START_CREATE_ACCOUNT` before the account creation module is loaded. Test both direct registration and the registration form on the login page. |
-| Coupon lookup | `discount_coupon` reads the `lookup_discount_coupon` POST field. Enforce verification before the lookup query. |
-| Order status | Protect guest lookup submissions to `order_status` with `action=status`. Signed-in customers are redirected to Account History. |
-| Account history | Offer a page-visit challenge for `account_history`, before its order list is rendered. |
-| Order details | Offer the same page-visit protection for `account_history_info`, which has its own route. |
+### Install on a Zen Cart 2.1.0 dev store
 
-The Admin design calls for per-route enablement and custom form entries. Form entries need the page, submission trigger, form selector, and a distinct Turnstile action. Page-visit entries need the page and a Cloudflare edge rule scoped to that route. List the presets by default and let store owners opt in to enforcement. Match the configured hostname and action during server-side verification. Keep the secret server-side. OPC 2.7.0 needs separate mappings for its AJAX handlers.
+1. Confirm the storefront hostname is proxied through Cloudflare. In Cloudflare, make an API token with **Zone / WAF / Edit**, scoped to that one zone, and copy the zone ID.
+2. Upload the contents of the ZIP's `admin/` folder into your store's renamed Admin directory. Preserve the folder structure.
+3. In that Admin directory, copy `includes/prowebs_edge/config.example.php` to `includes/prowebs_edge/config.local.php` and enter the zone ID and token in the copy. Keep the copy private. Alternatively, set `PROWEBS_CF_ZONE_ID` and `PROWEBS_CF_API_TOKEN` in the Admin PHP environment. Set the optional `host` in the local config if shoppers use a different hostname from the Zen Cart HTTPS configuration. This build scopes rules to one exact hostname.
+4. Open **Tools > Cloudflare page challenges** as a super admin. The plugin registers this menu on the first eligible Admin load. Grant access through Admin Profiles if needed.
+5. Enable a preset or custom target and verify the rule under Cloudflare's custom WAF rules. Test with a fresh browser session on the chosen page. PHP cURL is required for Admin to talk to Cloudflare.
 
-## Temporary product protection
+### Targets
 
-Use a Cloudflare WAF Managed Challenge scoped to a selected product URL when traffic must be challenged before it reaches the store. This uses the site's Cloudflare zone. Temporary edge controls and expiry are planned separately from storefront validation.
+- Presets include Login, Create account, Order status, Account history, Order details and Coupon lookup. Each preset starts inactive and uses the standard `main_page` URL.
+- Product ID protects the standard `product_info` URL for one product. For an SEO-rewritten product URL, choose **Exact public URL path** and enter the path you actually use, with its store directory if applicable. Use a separate target if both URLs need protection. Custom Zen Cart page names are also supported.
+- Each target uses one custom rule slot. If Cloudflare accepts a timed rule on your plan, it stops matching at the displayed UTC time. Remove expired rules to free rule slots. If Cloudflare rejects a timed expression, choose **Until removed** and remove it from Admin when ready.
+- Rules cover page visits. Guest order lookup and coupon lookup POSTs, storefront form validation and OPC AJAX submissions are outside this build's coverage. The storefront must send matching traffic through Cloudflare for the rules to apply.
 
-[Cloudflare Siteverify documentation](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/)
+### Remove
+
+Remove the plugin's active rules from its Admin screen or Cloudflare before removing the files. To remove the Admin menu registration, remove page key `prowebsEdgeChallenge` using **Admin Page Registration**, after removing the plugin files.
+
+[Cloudflare custom WAF rules](https://developers.cloudflare.com/waf/custom-rules/)
